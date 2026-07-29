@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AcherLab Stress Tool - Web Console</title>
+  <title>AcherLab Stress Tool - MHDDoS Engine</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 </head>
@@ -26,12 +26,15 @@
         </svg>
         <div>
           <h1>AcherLab Stress Tool</h1>
-          <span class="subtitle">Web Console · FOR AUTHORIZED USE ONLY</span>
+          <span class="subtitle">MHDDoS Engine · 50+ Attack Methods</span>
         </div>
       </div>
       <div class="header-status">
         <div class="status-dot" id="statusDot"></div>
         <span id="statusText">Idle</span>
+        <button class="btn-logout" id="logoutBtn" title="Logout">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </button>
       </div>
     </div>
   </header>
@@ -45,35 +48,89 @@
         </div>
         <form id="configForm" class="config-form">
           <div class="form-group">
-            <label for="url">Target URL</label>
-            <input type="url" id="url" placeholder="https://example.com" required>
+            <label for="layerSwitch">Attack Layer</label>
+            <div class="layer-switch">
+              <button type="button" class="layer-btn active" data-layer="7">Layer 7 (HTTP)</button>
+              <button type="button" class="layer-btn" data-layer="4">Layer 4 (TCP/UDP)</button>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group" id="methodGroup">
+              <label for="method">Attack Method</label>
+              <select id="method">
+                <optgroup label="Layer7">
+                  <option value="GET">GET - Standard GET flood</option>
+                  <option value="POST">POST - JSON POST flood</option>
+                  <option value="CFB">CFB - Cloudflare Bypass</option>
+                  <option value="BYPASS">BYPASS - Anti-DDoS bypass</option>
+                  <option value="CFBUAM">CFBUAM - CF Under Attack Mode</option>
+                  <option value="OVH">OVH - OVH bypass</option>
+                  <option value="DGB">DGB - DDoS-Guard bypass</option>
+                  <option value="AVB">AVB - ArvanCloud bypass</option>
+                  <option value="GSB">GSB - Google Shield bypass</option>
+                  <option value="DYN">DYN - Random subdomain flood</option>
+                  <option value="STRESS">STRESS - POST large payload</option>
+                  <option value="SLOW">SLOW - Slowloris headers</option>
+                  <option value="HEAD">HEAD - HEAD flood</option>
+                  <option value="COOKIE">COOKIE - Random cookie flood</option>
+                  <option value="XMLRPC">XMLRPC - WordPress pingback</option>
+                  <option value="APACHE">APACHE - Range exploit</option>
+                  <option value="NULL">NULL - Null UA/Referrer</option>
+                  <option value="RHEX">RHEX - Random hex path</option>
+                  <option value="BOT">BOT - Googlebot simulation</option>
+                  <option value="KILLER">KILLER - Multi-thread GET</option>
+                  <option value="PPS">PPS - Minimal raw request</option>
+                  <option value="EVEN">EVEN - Extra headers GET</option>
+                  <option value="DOWNLOADER">DOWNLOADER - Slow read</option>
+                  <option value="TOR">TOR - .onion bypass</option>
+                  <option value="STOMP">STOMP - chk_captcha bypass</option>
+                  <option value="BOMB">BOMB - bombardier tool</option>
+                </optgroup>
+                <optgroup label="Layer4">
+                  <option value="TCP">TCP - TCP data flood</option>
+                  <option value="UDP">UDP - UDP datagram flood</option>
+                  <option value="SYN">SYN - SYN flood (raw)</option>
+                  <option value="ICMP">ICMP - ICMP echo flood</option>
+                  <option value="CPS">CPS - Connection per second</option>
+                  <option value="CONNECTION">CONNECTION - Hold connections</option>
+                  <option value="VSE">VSE - Valve Source Engine</option>
+                  <option value="TS3">TS3 - TeamSpeak 3 ping</option>
+                  <option value="FIVEM">FIVEM - FiveM status</option>
+                  <option value="MINECRAFT">MINECRAFT - Minecraft ping</option>
+                  <option value="MCBOT">MCBOT - Minecraft bot</option>
+                  <option value="MEM">MEM - Memcached amp</option>
+                  <option value="NTP">NTP - NTP amp</option>
+                  <option value="DNS">DNS - DNS amp</option>
+                </optgroup>
+              </select>
+            </div>
+            <div class="form-group" id="targetGroup">
+              <label for="url">Target URL / IP:Port</label>
+              <input type="text" id="url" placeholder="https://example.com or 1.2.3.4:80" required>
+            </div>
           </div>
           <div class="form-row">
             <div class="form-group">
               <label for="threads">Threads</label>
-              <input type="number" id="threads" value="500" min="1" max="10000">
+              <input type="number" id="threads" value="100" min="1" max="10000">
             </div>
             <div class="form-group">
               <label for="duration">Duration (s)</label>
-              <input type="number" id="duration" value="3600" min="1" max="86400">
+              <input type="number" id="duration" value="60" min="1" max="86400">
             </div>
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label for="proxyMode">Proxy Mode</label>
-              <select id="proxyMode">
-                <option value="both">Both</option>
-                <option value="proxylist">Proxy List</option>
-                <option value="tor">Tor</option>
-                <option value="none">None</option>
+            <div class="form-group" id="rpcGroup">
+              <label for="rpc">RPC (Requests/Connection)</label>
+              <input type="number" id="rpc" value="10" min="1" max="1000">
+            </div>
+            <div class="form-group" id="proxyTypeGroup">
+              <label for="proxyType">Proxy Type</label>
+              <select id="proxyType">
+                <option value="0">All</option>
+                <option value="1">HTTP</option>
+                <option value="4">SOCKS4</option>
+                <option value="5">SOCKS5</option>
+                <option value="6">Random</option>
               </select>
-            </div>
-            <div class="form-group checkbox-group">
-              <label class="checkbox-label">
-                <input type="checkbox" id="noCf">
-                <span class="checkbox-custom"></span>
-                Disable Cloudflare Bypass
-              </label>
             </div>
           </div>
           <div class="form-actions">
@@ -97,7 +154,7 @@
         <div class="stats-grid">
           <div class="stat-item">
             <div class="stat-value" id="statRequests">0</div>
-            <div class="stat-label">Requests</div>
+            <div class="stat-label">Sent</div>
           </div>
           <div class="stat-item">
             <div class="stat-value" id="statSuccess">0</div>
@@ -121,21 +178,17 @@
         <div class="card-header">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><circle cx="6" cy="6" r="1" fill="currentColor"/><circle cx="6" cy="18" r="1" fill="currentColor"/></svg>
           <h2>Proxy Status</h2>
+          <button class="btn btn-small" id="fetchProxyBtn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            Fetch
+          </button>
         </div>
         <div class="proxy-grid">
-          <div class="proxy-item">
-            <span class="proxy-label">SOCKS5</span>
-            <span class="proxy-count" id="proxySocks5">0</span>
-          </div>
           <div class="proxy-item">
             <span class="proxy-label">HTTP</span>
             <span class="proxy-count" id="proxyHttp">0</span>
           </div>
           <div class="proxy-item">
-            <span class="proxy-label">HTTPS</span>
-            <span class="proxy-count" id="proxyHttps">0</span>
-          </div>
-          <div class="proxy-item total">
             <span class="proxy-label">Total</span>
             <span class="proxy-count" id="proxyTotal">0</span>
           </div>
@@ -145,22 +198,38 @@
       <section class="card sys-card">
         <div class="card-header">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><path d="M6 6h.01M6 18h.01"/></svg>
-          <h2>System</h2>
+          <h2>System Resources</h2>
         </div>
-        <div class="sys-grid">
-          <div class="sys-item">
-            <div class="sys-header">CPU</div>
-            <div class="sys-bar-bg">
-              <div class="sys-bar" id="cpuBar" style="width:0%"></div>
-            </div>
-            <div class="sys-value" id="cpuValue">0%</div>
+        <div class="sys-content">
+          <div class="sys-cpu-info" id="cpuInfo">
+            <span class="cpu-model">Detecting CPU...</span>
           </div>
-          <div class="sys-item">
-            <div class="sys-header">Memory</div>
-            <div class="sys-bar-bg">
-              <div class="sys-bar mem" id="memBar" style="width:0%"></div>
+          <div class="sys-grid">
+            <div class="sys-item">
+              <div class="sys-header">CPU</div>
+              <div class="sys-bar-bg">
+                <div class="sys-bar" id="cpuBar" style="width:0%"></div>
+              </div>
+              <div class="sys-value" id="cpuValue">0%</div>
             </div>
-            <div class="sys-value" id="memValue">0%</div>
+            <div class="sys-item">
+              <div class="sys-header">Mem</div>
+              <div class="sys-bar-bg">
+                <div class="sys-bar mem" id="memBar" style="width:0%"></div>
+              </div>
+              <div class="sys-value" id="memValue">0%</div>
+            </div>
+          </div>
+          <div class="core-grid" id="coreGrid"></div>
+          <div class="chart-row">
+            <div class="chart-box">
+              <div class="chart-label">CPU (60s)</div>
+              <canvas id="cpuChart" height="60"></canvas>
+            </div>
+            <div class="chart-box">
+              <div class="chart-label">Memory (60s)</div>
+              <canvas id="memChart" height="60"></canvas>
+            </div>
           </div>
         </div>
       </section>
@@ -179,7 +248,7 @@
   </main>
 
   <footer class="footer">
-    <p>&copy; 2026 AcherLab · For authorized security testing only · AcherLab không chịu trách nhiệm với việc sử dụng tool này</p>
+    <p>&copy; 2026 AcherLab · For authorized security testing only</p>
   </footer>
 
   <div class="toast" id="toast"></div>
