@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AcherLab Stress Tool - Web Console</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="bg-grid"></div>
+
+  <header class="header">
+    <div class="header-content">
+      <div class="logo">
+        <svg class="logo-icon" viewBox="0 0 40 40" width="40" height="40">
+          <defs>
+            <linearGradient id="lg" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" style="stop-color:#19D7FF"/>
+              <stop offset="100%" style="stop-color:#7B2FF7"/>
+            </linearGradient>
+          </defs>
+          <rect x="4" y="4" width="32" height="32" rx="8" fill="url(#lg)" opacity="0.15"/>
+          <path d="M20 8L32 16V28L20 36L8 28V16L20 8Z" fill="none" stroke="url(#lg)" stroke-width="2"/>
+          <circle cx="20" cy="22" r="4" fill="url(#lg)" opacity="0.6"/>
+        </svg>
+        <div>
+          <h1>AcherLab Stress Tool</h1>
+          <span class="subtitle">Web Console · FOR AUTHORIZED USE ONLY</span>
+        </div>
+      </div>
+      <div class="header-status">
+        <div class="status-dot" id="statusDot"></div>
+        <span id="statusText">Idle</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="main">
+    <div class="grid">
+      <section class="card config-card">
+        <div class="card-header">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          <h2>Configuration</h2>
+        </div>
+        <form id="configForm" class="config-form">
+          <div class="form-group">
+            <label for="url">Target URL</label>
+            <input type="url" id="url" placeholder="https://example.com" required>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="threads">Threads</label>
+              <input type="number" id="threads" value="500" min="1" max="10000">
+            </div>
+            <div class="form-group">
+              <label for="duration">Duration (s)</label>
+              <input type="number" id="duration" value="3600" min="1" max="86400">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="proxyMode">Proxy Mode</label>
+              <select id="proxyMode">
+                <option value="both">Both</option>
+                <option value="proxylist">Proxy List</option>
+                <option value="tor">Tor</option>
+                <option value="none">None</option>
+              </select>
+            </div>
+            <div class="form-group checkbox-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="noCf">
+                <span class="checkbox-custom"></span>
+                Disable Cloudflare Bypass
+              </label>
+            </div>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" id="startBtn">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              Start Attack
+            </button>
+            <button type="button" class="btn btn-danger" id="stopBtn" disabled>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+              Stop
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <section class="card stats-card">
+        <div class="card-header">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 16l4-8 4 4 4-6"/></svg>
+          <h2>Live Stats</h2>
+        </div>
+        <div class="stats-grid">
+          <div class="stat-item">
+            <div class="stat-value" id="statRequests">0</div>
+            <div class="stat-label">Requests</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value" id="statSuccess">0</div>
+            <div class="stat-label">Successful</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value" id="statRate">0%</div>
+            <div class="stat-label">Success Rate</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value" id="statUptime">00:00:00</div>
+            <div class="stat-label">Uptime</div>
+          </div>
+        </div>
+        <div class="progress-bar-container">
+          <div class="progress-bar" id="progressBar"></div>
+        </div>
+      </section>
+
+      <section class="card proxy-card">
+        <div class="card-header">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><circle cx="6" cy="6" r="1" fill="currentColor"/><circle cx="6" cy="18" r="1" fill="currentColor"/></svg>
+          <h2>Proxy Status</h2>
+        </div>
+        <div class="proxy-grid">
+          <div class="proxy-item">
+            <span class="proxy-label">SOCKS5</span>
+            <span class="proxy-count" id="proxySocks5">0</span>
+          </div>
+          <div class="proxy-item">
+            <span class="proxy-label">HTTP</span>
+            <span class="proxy-count" id="proxyHttp">0</span>
+          </div>
+          <div class="proxy-item">
+            <span class="proxy-label">HTTPS</span>
+            <span class="proxy-count" id="proxyHttps">0</span>
+          </div>
+          <div class="proxy-item total">
+            <span class="proxy-label">Total</span>
+            <span class="proxy-count" id="proxyTotal">0</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="card sys-card">
+        <div class="card-header">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><path d="M6 6h.01M6 18h.01"/></svg>
+          <h2>System</h2>
+        </div>
+        <div class="sys-grid">
+          <div class="sys-item">
+            <div class="sys-header">CPU</div>
+            <div class="sys-bar-bg">
+              <div class="sys-bar" id="cpuBar" style="width:0%"></div>
+            </div>
+            <div class="sys-value" id="cpuValue">0%</div>
+          </div>
+          <div class="sys-item">
+            <div class="sys-header">Memory</div>
+            <div class="sys-bar-bg">
+              <div class="sys-bar mem" id="memBar" style="width:0%"></div>
+            </div>
+            <div class="sys-value" id="memValue">0%</div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <section class="card log-card">
+      <div class="card-header">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        <h2>Console Log</h2>
+        <span class="log-count" id="logCount">0 lines</span>
+      </div>
+      <div class="log-container" id="logContainer">
+        <div class="log-empty">No output yet. Start an attack to see logs...</div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>&copy; 2026 AcherLab · For authorized security testing only · AcherLab không chịu trách nhiệm với việc sử dụng tool này</p>
+  </footer>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
