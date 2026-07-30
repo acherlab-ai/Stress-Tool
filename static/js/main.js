@@ -105,19 +105,6 @@ function drawChart(canvas, ctx, data, color) {
   ctx.fillText(last.value.toFixed(1)+'%', w-pad, h-pad)
 }
 
-function updateCores(cores) {
-  const g = $('coreGrid')
-  if (!cores || !cores.length) {
-    g.innerHTML = '<div class="core-empty">No data</div>'
-    return
-  }
-  g.innerHTML = cores.map(c => {
-    const u = c.usage || 0
-    const color = u > 80 ? 'var(--accent-red)' : u > 50 ? 'var(--accent-yellow)' : 'var(--accent-cyan)'
-    return `<div class="core-item"><div class="core-label">C${c.core}</div><div class="core-bar-bg"><div class="core-bar" style="width:${u}%;background:${color}"></div></div><div class="core-value">${u.toFixed(1)}%</div></div>`
-  }).join('')
-}
-
 function toggleLayer(layer) {
   $$('.layer-btn').forEach(b => b.classList.toggle('active', parseInt(b.dataset.layer) === layer))
   $$('#method optgroup').forEach(g => g.style.display = (layer === 7 && g.label === 'Layer7') || (layer === 4 && g.label === 'Layer4') ? '' : 'none')
@@ -228,8 +215,6 @@ async function poll() {
       const ci = w.cpu_info
       $('cpuInfo').innerHTML = `<span class="cpu-model">${ci.model}</span> <span class="cpu-detail">${ci.cores}c/${ci.threads}t</span>`
     }
-
-    updateCores(s.cpu_per_core || [])
 
     const now = new Date()
     cpuHistory.push({time: now.toLocaleTimeString(), value: cpu})

