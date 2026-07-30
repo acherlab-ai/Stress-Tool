@@ -184,22 +184,20 @@ async function poll() {
       setStatus(true)
       $('statRequests').textContent = formatNum(s.requests || 0)
       $('statSuccess').textContent = formatNum(s.success || 0)
-      $('statRate').textContent = (s.rate || 0) + '%'
+      $('statRate').textContent = formatNum(s.rate || 0) + '/s'
       $('statUptime').textContent = s.uptime || '00:00:00'
-      $('progressBar').style.width = Math.min(s.rate || 0, 100) + '%'
       $('startBtn').disabled = true
       $('stopBtn').disabled = false
     } else if (state.running && (s.requests || 0) > 0) {
       state.running = false
       setStatus(false)
       $('statUptime').textContent = s.uptime || '00:00:00'
-      $('progressBar').style.width = Math.min(s.rate || 0, 100) + '%'
       $('startBtn').disabled = false
       $('stopBtn').disabled = true
     } else {
       state.running = false
       setStatus(false)
-      $('progressBar').style.width = '0%'
+      $('statUptime').textContent = '00:00:00'
       $('startBtn').disabled = false
       $('stopBtn').disabled = true
     }

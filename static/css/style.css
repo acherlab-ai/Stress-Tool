@@ -100,7 +100,7 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
 .log-text.status{color:var(--accent-cyan)}
 .log-text.finished{color:var(--accent-green)}
 .log-text.proxy{color:var(--accent-yellow)}
-.log-text.error{color:var(--accent-red)}
+.log-text.error{color:var(--accent-purple);font-weight:600}
 .log-text.info{color:var(--accent-purple)}
 .footer{text-align:center;padding:16px;font-size:11px;color:var(--text-muted);border-top:1px solid var(--border);max-width:1280px;margin:0 auto}
 .toast{position:fixed;bottom:24px;right:24px;padding:10px 18px;border-radius:var(--radius-sm);font-size:13px;font-weight:500;z-index:9999;transform:translateY(80px);opacity:0;transition:all 0.3s;pointer-events:none}
