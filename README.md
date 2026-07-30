@@ -33,3 +33,4 @@ python agent.py
 2. Server lưu command, Worker poll lấy được
 3. Worker chạy MHDDoS, gửi stats + logs về Server
 4. Server trả về UI real-time qua polling
+# Auto-deploy trigger Thu Jul 30 13:01:36 UTC 2026
