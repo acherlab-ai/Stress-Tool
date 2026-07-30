@@ -1,44 +1,35 @@
-# AcherLab Stress Tool - Web Console
+# AcherLab Stress Tool - Controller + Worker
 
-Web interface for the AcherLab Stress Testing Tool. Run stress tests from your browser on your own server.
+Kiến trúc 2 máy: **Server (Railway)** + **Worker (VPS)**
 
-## Quick Start
+## Server (Railway)
 
 ```bash
+cd server
 pip install -r requirements.txt
-python3 app.py
+export SECRET_KEY="your-secret-key"
+python app.py
 ```
 
-Open http://localhost:5000 in your browser.
+Deploy lên Railway:
+1. Push `server/` lên GitHub
+2. Import vào Railway
+3. Set env: `SECRET_KEY`, `PORT` (Railway tự set)
 
-## Features
+## Worker (VPS)
 
-- Web UI to configure and launch L7 stress attacks
-- Real-time stats: requests, success rate, uptime
-- Live console log output
-- System resource monitoring (CPU, Memory)
-- Proxy status display
-- Cloudflare bypass support
-- Start/Stop attack control
+```bash
+cd worker
+pip install -r requirements.txt
+export SERVER_URL="https://your-app.railway.app"
+export WORKER_TOKEN="<token từ server/data/worker.json>"
+export MHDDOS_DIR="/path/to/MHDDoS"
+python agent.py
+```
 
-## Parameters
+## Luồng hoạt động
 
-| Param | Default | Description |
-|-------|---------|-------------|
-| URL | required | Target URL |
-| Threads | 500 | Number of threads |
-| Duration | 3600 | Duration in seconds |
-| Proxy Mode | both | tor/proxylist/both/none |
-| CF Bypass | enabled | Disable Cloudflare bypass |
-
-## API Endpoints
-
-- `GET /` - Web interface
-- `GET /api/system` - System & proxy stats
-- `GET /api/logs?since=N` - Attack logs
-- `POST /api/start` - Start attack
-- `POST /api/stop` - Stop attack
-
-## Disclaimer
-
-For authorized security testing only. AcherLab không chịu trách nhiệm với việc sử dụng tool này.
+1. Browser gửi lệnh Start → Server API
+2. Server lưu command, Worker poll lấy được
+3. Worker chạy MHDDoS, gửi stats + logs về Server
+4. Server trả về UI real-time qua polling

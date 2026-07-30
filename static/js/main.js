@@ -1,330 +1,321 @@
-const statusDot = document.getElementById('statusDot');
-const statusText = document.getElementById('statusText');
-const startBtn = document.getElementById('startBtn');
-const stopBtn = document.getElementById('stopBtn');
-const logContainer = document.getElementById('logContainer');
-const logCount = document.getElementById('logCount');
+let state = { running: false, lastLogLines: 0 }
+let cpuHistory = [], memHistory = []
+let toastTimer = null
 
-const statRequests = document.getElementById('statRequests');
-const statSuccess = document.getElementById('statSuccess');
-const statRate = document.getElementById('statRate');
-const statUptime = document.getElementById('statUptime');
-const progressBar = document.getElementById('progressBar');
+const $ = id => document.getElementById(id)
+const $$ = sel => document.querySelectorAll(sel)
 
-const proxyHttp = document.getElementById('proxyHttp');
-const proxyTotal = document.getElementById('proxyTotal');
-const fetchProxyBtn = document.getElementById('fetchProxyBtn');
-
-const cpuBar = document.getElementById('cpuBar');
-const cpuValue = document.getElementById('cpuValue');
-const memBar = document.getElementById('memBar');
-const memValue = document.getElementById('memValue');
-const cpuInfo = document.getElementById('cpuInfo');
-const coreGrid = document.getElementById('coreGrid');
-
-const methodSelect = document.getElementById('method');
-const layerBtns = document.querySelectorAll('.layer-btn');
-
-const rpcGroup = document.getElementById('rpcGroup');
-const proxyTypeGroup = document.getElementById('proxyTypeGroup');
-
-let lastLogIndex = 0;
-let toastTimer = null;
-let currentLayer = 7;
-
-const cpuCanvas = document.getElementById('cpuChart');
-const memCanvas = document.getElementById('memChart');
-const cpuCtx = cpuCanvas.getContext('2d');
-const memCtx = memCanvas.getContext('2d');
-
-function showToast(message, type = 'success') {
-  const toast = document.getElementById('toast');
-  toast.textContent = message;
-  toast.className = `toast ${type} show`;
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toast.classList.remove('show'), 3500);
+function showToast(msg, type='success') {
+  const t = $('toast')
+  t.textContent = msg
+  t.className = `toast ${type} show`
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => t.classList.remove('show'), 3000)
 }
 
-function formatNumber(n) {
-  return n.toLocaleString();
-}
+function formatNum(n) { return Number(n).toLocaleString() }
 
-function setStatus(state) {
-  statusDot.className = 'status-dot';
-  if (state === 'running') {
-    statusDot.classList.add('running');
-    statusText.textContent = 'Running';
-    statusText.style.color = 'var(--accent-green)';
-  } else if (state === 'stopped') {
-    statusDot.classList.add('stopped');
-    statusText.textContent = 'Stopped';
-    statusText.style.color = 'var(--accent-red)';
+function setStatus(running) {
+  const dot = $('statusDot'), text = $('statusText')
+  if (running) {
+    dot.className = 'status-dot running'
+    text.textContent = 'Running'
+    text.style.color = 'var(--accent-green)'
+  } else if (state.running) {
+    dot.className = 'status-dot stopped'
+    text.textContent = 'Stopped'
+    text.style.color = 'var(--accent-red)'
   } else {
-    statusDot.classList.add('idle');
-    statusText.textContent = 'Idle';
-    statusText.style.color = 'var(--text-secondary)';
+    dot.className = 'status-dot idle'
+    text.textContent = 'Idle'
+    text.style.color = 'var(--text-secondary)'
   }
 }
 
-function classifyLog(text) {
-  if (/Attacking|Sent:/.test(text)) return 'status';
-  if (/Finished|Completed|Done/.test(text)) return 'finished';
-  if (/Proxy|proxy/.test(text)) return 'proxy';
-  if (/Error|error|fail|Failed|Traceback/.test(text)) return 'error';
-  if (/INFO/.test(text)) return 'info';
-  return '';
+function setWorker(online) {
+  const dot = $('workerDot'), text = $('workerText'), footer = $('footerWorker')
+  dot.className = `worker-dot ${online ? 'online' : ''}`
+  text.textContent = online ? 'Worker Online' : 'Worker Offline'
+  text.style.color = online ? 'var(--accent-green)' : 'var(--accent-red)'
+  if (footer) footer.textContent = online ? 'Worker Connected' : 'Worker Offline'
+}
+
+function classifyLog(t) {
+  if (/Attacking|Sent:|Running/.test(t)) return 'status'
+  if (/Finished|Completed|Done|Stopped/.test(t)) return 'finished'
+  if (/Proxy|proxy/.test(t)) return 'proxy'
+  if (/Error|error|fail|Failed|Traceback/.test(t)) return 'error'
+  if (/^\[.*\]/.test(t)) return 'info'
+  return ''
 }
 
 function appendLogs(logs) {
-  if (!logs.length) return;
-  const empty = logContainer.querySelector('.log-empty');
-  if (empty) empty.remove();
-  const fragment = document.createDocumentFragment();
-  logs.forEach(log => {
-    const div = document.createElement('div');
-    div.className = 'log-line';
-    const timeSpan = document.createElement('span');
-    timeSpan.className = 'log-time';
-    timeSpan.textContent = log.time;
-    const textSpan = document.createElement('span');
-    textSpan.className = `log-text ${classifyLog(log.text)}`;
-    textSpan.textContent = log.text;
-    div.appendChild(timeSpan);
-    div.appendChild(textSpan);
-    fragment.appendChild(div);
-  });
-  logContainer.appendChild(fragment);
-  logContainer.scrollTop = logContainer.scrollHeight;
-  logCount.textContent = `${logContainer.children.length} lines`;
+  if (!logs.length) return
+  const c = $('logContainer')
+  const empty = c.querySelector('.log-empty')
+  if (empty) empty.remove()
+  const frag = document.createDocumentFragment()
+  logs.forEach(l => {
+    const d = document.createElement('div')
+    d.className = 'log-line'
+    d.innerHTML = `<span class="log-time">${l.time}</span><span class="log-text ${classifyLog(l.text)}">${l.text}</span>`
+    frag.appendChild(d)
+  })
+  c.appendChild(frag)
+  c.scrollTop = c.scrollHeight
+  $('logCount').textContent = `${c.children.length} lines`
 }
 
-function drawSparkline(canvas, ctx, data, color) {
-  const w = canvas.parentElement.clientWidth - 4;
-  const h = canvas.height;
-  canvas.width = w * devicePixelRatio;
-  canvas.height = h * devicePixelRatio;
-  ctx.scale(devicePixelRatio, devicePixelRatio);
-  ctx.clearRect(0, 0, w, h);
+function drawChart(canvas, ctx, data, color) {
+  const w = canvas.parentElement.clientWidth - 4
+  const h = canvas.height
+  canvas.width = w * devicePixelRatio
+  canvas.height = h * devicePixelRatio
+  ctx.scale(devicePixelRatio, devicePixelRatio)
+  ctx.clearRect(0, 0, w, h)
   if (data.length < 2) {
-    ctx.fillStyle = '#5a6485';
-    ctx.font = '11px Inter';
-    ctx.textAlign = 'center';
-    ctx.fillText('Waiting...', w/2, h/2 + 4);
-    return;
+    ctx.fillStyle = '#5a6485'
+    ctx.font = '10px Inter'
+    ctx.textAlign = 'center'
+    ctx.fillText('Waiting...', w/2, h/2 + 3)
+    return
   }
-  const pad = 2;
-  const dw = (w - pad * 2) / Math.max(data.length - 1, 1);
-  const values = data.map(d => d.value);
-  const max = Math.max(...values, 10);
-  const min = 0;
-  const range = max - min || 1;
-  ctx.beginPath();
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 1.5;
-  ctx.lineJoin = 'round';
+  const pad = 2
+  const dw = (w - pad*2) / Math.max(data.length-1, 1)
+  const vals = data.map(d => d.value)
+  const max = Math.max(...vals, 10)
+  ctx.beginPath()
+  ctx.strokeStyle = color
+  ctx.lineWidth = 1.5
+  ctx.lineJoin = 'round'
   for (let i = 0; i < data.length; i++) {
-    const x = pad + i * dw;
-    const y = h - pad - ((data[i].value - min) / range) * (h - pad * 2);
-    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    const x = pad + i * dw
+    const y = h - pad - ((data[i].value - 0) / max) * (h - pad*2)
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
   }
-  ctx.stroke();
-  const last = data[data.length - 1];
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.arc(pad + (data.length - 1) * dw, h - pad - ((last.value - min) / range) * (h - pad * 2), 2.5, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = color;
-  ctx.font = '11px JetBrains Mono';
-  ctx.textAlign = 'right';
-  ctx.fillText(last.value.toFixed(1) + '%', w - pad, h - pad);
+  ctx.stroke()
+  const last = data[data.length-1]
+  ctx.fillStyle = color
+  ctx.beginPath()
+  ctx.arc(pad + (data.length-1) * dw, h - pad - ((last.value-0)/max)*(h-pad*2), 2, 0, Math.PI*2)
+  ctx.fill()
+  ctx.fillStyle = color
+  ctx.font = '10px JetBrains Mono'
+  ctx.textAlign = 'right'
+  ctx.fillText(last.value.toFixed(1)+'%', w-pad, h-pad)
 }
 
 function updateCores(cores) {
+  const g = $('coreGrid')
   if (!cores || !cores.length) {
-    coreGrid.innerHTML = '<div class="core-empty">No core data</div>';
-    return;
+    g.innerHTML = '<div class="core-empty">No data</div>'
+    return
   }
-  coreGrid.innerHTML = '';
-  cores.forEach(c => {
-    const el = document.createElement('div');
-    el.className = 'core-item';
-    const usage = c.usage || 0;
-    const color = usage > 80 ? 'var(--accent-red)' : usage > 50 ? 'var(--accent-yellow)' : 'var(--accent-cyan)';
-    el.innerHTML = `
-      <div class="core-label">Core ${c.core}</div>
-      <div class="core-bar-bg">
-        <div class="core-bar" style="width:${usage}%;background:${color}"></div>
-      </div>
-      <div class="core-value">${usage.toFixed(1)}%</div>
-    `;
-    coreGrid.appendChild(el);
-  });
+  g.innerHTML = cores.map(c => {
+    const u = c.usage || 0
+    const color = u > 80 ? 'var(--accent-red)' : u > 50 ? 'var(--accent-yellow)' : 'var(--accent-cyan)'
+    return `<div class="core-item"><div class="core-label">C${c.core}</div><div class="core-bar-bg"><div class="core-bar" style="width:${u}%;background:${color}"></div></div><div class="core-value">${u.toFixed(1)}%</div></div>`
+  }).join('')
 }
 
 function toggleLayer(layer) {
-  currentLayer = layer;
-  layerBtns.forEach(b => b.classList.toggle('active', parseInt(b.dataset.layer) === layer));
-  const opts = methodSelect.querySelectorAll('option');
-  opts.forEach(o => {
-    const inL7 = o.parentElement?.label === 'Layer7';
-    const inL4 = o.parentElement?.label === 'Layer4';
-    if (layer === 7) {
-      o.style.display = inL7 ? '' : 'none';
-    } else {
-      o.style.display = inL4 ? '' : 'none';
-    }
-  });
-  const l7vis = layer === 7 ? '' : 'none';
-  rpcGroup.style.display = l7vis;
-  proxyTypeGroup.style.display = l7vis;
-  const urlInput = document.getElementById('url');
-  urlInput.placeholder = layer === 7 ? 'https://example.com' : '1.2.3.4:80';
-  if (layer === 4) {
-    methodSelect.querySelector('optgroup[label="Layer4"] option')?.click();
-  } else {
-    methodSelect.querySelector('optgroup[label="Layer7"] option')?.click();
+  $$('.layer-btn').forEach(b => b.classList.toggle('active', parseInt(b.dataset.layer) === layer))
+  $$('#method optgroup').forEach(g => g.style.display = (layer === 7 && g.label === 'Layer7') || (layer === 4 && g.label === 'Layer4') ? '' : 'none')
+  $('rpcGroup').style.display = layer === 7 ? '' : 'none'
+  $('proxyTypeGroup').style.display = layer === 7 ? '' : 'none'
+  $('url').placeholder = layer === 7 ? 'https://example.com' : '1.2.3.4:80'
+}
+
+function loadTargets(targets) {
+  const list = $('targetList'), count = $('targetCount')
+  if (!targets.length) {
+    list.innerHTML = '<div class="target-empty">No saved targets</div>'
+    count.textContent = '0'
+    return
   }
+  count.textContent = targets.length
+  list.innerHTML = targets.map(t => `
+    <div class="target-item" data-url="${t.url}">
+      <div style="flex:1;min-width:0">
+        <div class="target-name">${t.name || t.url}</div>
+        <div class="target-url">${t.url}</div>
+      </div>
+      <button class="target-del" data-id="${t.id}" title="Delete">&times;</button>
+    </div>
+  `).join('')
+  list.querySelectorAll('.target-item').forEach(el => {
+    el.addEventListener('click', e => {
+      if (e.target.closest('.target-del')) return
+      $('url').value = el.dataset.url
+      list.querySelectorAll('.target-item').forEach(i => i.classList.remove('selected'))
+      el.classList.add('selected')
+    })
+  })
+  list.querySelectorAll('.target-del').forEach(btn => {
+    btn.addEventListener('click', async e => {
+      e.stopPropagation()
+      if (!confirm('Delete target?')) return
+      try {
+        const r = await fetch(`/api/targets/${btn.dataset.id}`, {method: 'DELETE'})
+        if (r.ok) {
+          const data = await r.json()
+          loadTargets(data.targets || [])
+          showToast('Target deleted')
+        }
+      } catch(e) { showToast('Delete failed', 'error') }
+    })
+  })
 }
 
-async function pollSystem() {
+async function saveCurrentTarget() {
+  const url = $('url').value.trim()
+  if (!url) return
   try {
-    const res = await fetch('/api/system');
-    const data = await res.json();
-    const s = data.stats;
-    if (s.running) {
-      setStatus('running');
-      statRequests.textContent = formatNumber(s.requests);
-      statSuccess.textContent = formatNumber(s.success);
-      statRate.textContent = s.rate + '%';
-      statUptime.textContent = data.uptime;
-      progressBar.style.width = Math.min(s.rate, 100) + '%';
-      startBtn.disabled = true;
-      stopBtn.disabled = false;
-    } else if (s.requests > 0) {
-      setStatus('stopped');
-      statUptime.textContent = data.uptime;
-      progressBar.style.width = Math.min(s.rate, 100) + '%';
-      startBtn.disabled = false;
-      stopBtn.disabled = true;
-    } else {
-      setStatus('idle');
-      progressBar.style.width = '0%';
-    }
-    proxyHttp.textContent = data.proxies.http;
-    proxyTotal.textContent = data.proxies.total;
-    const sys = data.system;
-    const cpu = parseFloat(sys.cpu) || 0;
-    const mem = parseFloat(sys.memory) || 0;
-    cpuBar.style.width = Math.min(cpu, 100) + '%';
-    cpuValue.textContent = cpu.toFixed(1) + '%';
-    memBar.style.width = Math.min(mem, 100) + '%';
-    memValue.textContent = mem.toFixed(1) + '%';
-    if (sys.cpu_info) {
-      const ci = sys.cpu_info;
-      cpuInfo.innerHTML = `<span class="cpu-model">${ci.model}</span> <span class="cpu-detail">${ci.cores} cores / ${ci.threads} threads</span>`;
-    }
-    updateCores(sys.cpu_per_core);
-    drawSparkline(cpuCanvas, cpuCtx, sys.cpu_history || [], '#19D7FF');
-    drawSparkline(memCanvas, memCtx, sys.mem_history || [], '#7B2FF7');
-  } catch (e) {}
-}
-
-async function pollLogs() {
-  try {
-    const res = await fetch(`/api/logs?since=${lastLogIndex}`);
-    const logs = await res.json();
-    if (logs.length) {
-      appendLogs(logs);
-      lastLogIndex += logs.length;
-    }
-  } catch (e) {}
-}
-
-layerBtns.forEach(btn => {
-  btn.addEventListener('click', () => toggleLayer(parseInt(btn.dataset.layer)));
-});
-
-document.getElementById('configForm').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  if (startBtn.disabled) return;
-  const target = document.getElementById('url').value.trim();
-  if (!target) {
-    showToast('Please enter a target URL/IP', 'error');
-    return;
-  }
-  startBtn.disabled = true;
-  startBtn.textContent = 'Starting...';
-  try {
-    const payload = {
-      method: document.getElementById('method').value,
-      url: target,
-      threads: parseInt(document.getElementById('threads').value) || 100,
-      duration: parseInt(document.getElementById('duration').value) || 60,
-      proxy_type: currentLayer === 7 ? parseInt(document.getElementById('proxyType').value) : 0,
-      rpc: currentLayer === 7 ? parseInt(document.getElementById('rpc').value) || 10 : 1,
-    };
-    const res = await fetch('/api/start', {
+    const r = await fetch('/api/targets', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    const result = await res.json();
-    if (res.ok) {
-      showToast('Attack started! Method: ' + payload.method);
-      setStatus('running');
-      stopBtn.disabled = false;
-      lastLogIndex = 0;
-      logContainer.innerHTML = '<div class="log-empty">Waiting for output...</div>';
-      logCount.textContent = '0 lines';
-    } else {
-      showToast(result.error || 'Failed to start', 'error');
-      startBtn.disabled = false;
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({url, name: url})
+    })
+    if (r.ok) {
+      const data = await r.json()
+      loadTargets(data.targets)
     }
-  } catch (e) {
-    showToast('Connection error', 'error');
-    startBtn.disabled = false;
-  }
-  startBtn.textContent = 'Start Attack';
-});
+  } catch(e) {}
+}
 
-stopBtn.addEventListener('click', async () => {
-  stopBtn.disabled = true;
+async function poll() {
   try {
-    const res = await fetch('/api/stop', { method: 'POST' });
-    const result = await res.json();
-    showToast(result.message || 'Attack stopped');
-    setStatus('stopped');
-    startBtn.disabled = false;
-  } catch (e) {
-    showToast('Failed to stop', 'error');
-    stopBtn.disabled = false;
-  }
-});
+    const r = await fetch('/api/system')
+    const data = await r.json()
+    const s = data.stats || {}
+    const w = data.worker || {}
 
-fetchProxyBtn.addEventListener('click', async () => {
-  fetchProxyBtn.disabled = true;
-  fetchProxyBtn.innerHTML = '<span style="font-size:12px">Fetching...</span>';
+    setWorker(w.online)
+
+    if (s.running) {
+      state.running = true
+      setStatus(true)
+      $('statRequests').textContent = formatNum(s.requests || 0)
+      $('statSuccess').textContent = formatNum(s.success || 0)
+      $('statRate').textContent = (s.rate || 0) + '%'
+      $('statUptime').textContent = s.uptime || '00:00:00'
+      $('progressBar').style.width = Math.min(s.rate || 0, 100) + '%'
+      $('startBtn').disabled = true
+      $('stopBtn').disabled = false
+    } else if (state.running && (s.requests || 0) > 0) {
+      state.running = false
+      setStatus(false)
+      $('statUptime').textContent = s.uptime || '00:00:00'
+      $('progressBar').style.width = Math.min(s.rate || 0, 100) + '%'
+      $('startBtn').disabled = false
+      $('stopBtn').disabled = true
+    } else {
+      state.running = false
+      setStatus(false)
+      $('progressBar').style.width = '0%'
+      $('startBtn').disabled = false
+      $('stopBtn').disabled = true
+    }
+
+    const cpu = parseFloat(s.cpu) || 0
+    const mem = parseFloat(s.memory) || 0
+    $('cpuBar').style.width = Math.min(cpu, 100) + '%'
+    $('cpuValue').textContent = cpu.toFixed(1) + '%'
+    $('memBar').style.width = Math.min(mem, 100) + '%'
+    $('memValue').textContent = mem.toFixed(1) + '%'
+
+    if (w.cpu_info) {
+      const ci = w.cpu_info
+      $('cpuInfo').innerHTML = `<span class="cpu-model">${ci.model}</span> <span class="cpu-detail">${ci.cores}c/${ci.threads}t</span>`
+    }
+
+    updateCores(s.cpu_per_core || [])
+
+    const now = new Date()
+    cpuHistory.push({time: now.toLocaleTimeString(), value: cpu})
+    memHistory.push({time: now.toLocaleTimeString(), value: mem})
+    if (cpuHistory.length > 60) cpuHistory.shift()
+    if (memHistory.length > 60) memHistory.shift()
+
+    drawChart($('cpuChart'), $('cpuChart').getContext('2d'), cpuHistory, '#19D7FF')
+    drawChart($('memChart'), $('memChart').getContext('2d'), memHistory, '#7B2FF7')
+
+    if (data.logs && data.logs.length > state.lastLogLines) {
+      const newLogs = data.logs.slice(state.lastLogLines)
+      appendLogs(newLogs)
+      state.lastLogLines = data.logs.length
+    }
+  } catch(e) {}
+}
+
+async function pollTargets() {
   try {
-    await fetch('/api/proxies/fetch', { method: 'POST' });
-    showToast('Fetching proxies in background...');
-    setTimeout(() => {
-      fetchProxyBtn.disabled = false;
-      fetchProxyBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Fetch';
-    }, 3000);
-  } catch (e) {
-    showToast('Failed', 'error');
-    fetchProxyBtn.disabled = false;
-    fetchProxyBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Fetch';
-  }
-});
+    const r = await fetch('/api/targets')
+    const targets = await r.json()
+    loadTargets(targets)
+  } catch(e) {}
+}
 
-document.getElementById('logoutBtn').addEventListener('click', async () => {
-  await fetch('/api/logout', { method: 'POST' });
-  window.location.href = '/login';
-});
+$$('.layer-btn').forEach(btn => {
+  btn.addEventListener('click', () => toggleLayer(parseInt(btn.dataset.layer)))
+})
 
-toggleLayer(7);
-setInterval(pollSystem, 1000);
-setInterval(pollLogs, 1500);
-pollSystem();
-pollLogs();
+$('configForm').addEventListener('submit', async e => {
+  e.preventDefault()
+  if ($('startBtn').disabled) return
+  const url = $('url').value.trim()
+  if (!url) { showToast('Enter target URL', 'error'); return }
+  $('startBtn').disabled = true
+  $('startBtn').innerHTML = 'Sending...'
+  try {
+    const r = await fetch('/api/attack/start', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        method: $('method').value,
+        url,
+        threads: parseInt($('threads').value) || 100,
+        duration: parseInt($('duration').value) || 60,
+        proxy_type: parseInt($('proxyType').value) || 0,
+        rpc: parseInt($('rpc').value) || 10,
+      })
+    })
+    const d = await r.json()
+    if (r.ok) {
+      showToast('Attack sent to worker: ' + ($('method').value))
+      $('stopBtn').disabled = false
+      saveCurrentTarget()
+    } else {
+      showToast(d.error || 'Failed', 'error')
+      $('startBtn').disabled = false
+    }
+  } catch(e) { showToast('Connection error', 'error'); $('startBtn').disabled = false }
+  $('startBtn').innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> Start'
+})
+
+$('stopBtn').addEventListener('click', async () => {
+  $('stopBtn').disabled = true
+  try {
+    const r = await fetch('/api/attack/stop', {method: 'POST'})
+    const d = await r.json()
+    showToast(d.message || 'Stop sent')
+    setTimeout(() => { $('startBtn').disabled = false }, 1000)
+  } catch(e) { showToast('Failed', 'error'); $('stopBtn').disabled = false }
+})
+
+$('clearLogBtn').addEventListener('click', () => {
+  $('logContainer').innerHTML = '<div class="log-empty">Cleared</div>'
+  $('logCount').textContent = '0 lines'
+  state.lastLogLines = 0
+})
+
+$('logoutBtn').addEventListener('click', async () => {
+  await fetch('/api/logout', {method: 'POST'})
+  window.location.href = '/login'
+})
+
+toggleLayer(7)
+pollTargets()
+setInterval(poll, 1200)
+setInterval(pollTargets, 10000)
+poll()
