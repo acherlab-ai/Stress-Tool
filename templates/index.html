@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AcherLab - Stress Tool Controller</title>
+  <title>AcherLab - Multi Worker Control</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
@@ -20,16 +20,11 @@
         </svg>
         <div>
           <h1>AcherLab Controller</h1>
-          <span class="subtitle" id="subtitleServer">Remote Stress Tool · Web Console</span>
+          <span class="subtitle">Multi-Worker · Task Queue</span>
         </div>
       </div>
       <div class="header-status">
-        <div class="worker-badge" id="workerBadge">
-          <span class="worker-dot" id="workerDot"></span>
-          <span id="workerText">Worker Offline</span>
-        </div>
-        <div class="status-dot" id="statusDot"></div>
-        <span id="statusText">Idle</span>
+        <span id="workerCount" class="worker-count">0 workers</span>
         <button class="btn-icon" id="logoutBtn" title="Logout">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
         </button>
@@ -38,161 +33,74 @@
   </header>
 
   <main class="main">
-    <div class="grid">
-      <section class="card config-card">
-        <div class="card-header">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-          <h2>Attack Configuration</h2>
-        </div>
-        <form id="configForm" class="config-form">
-          <div class="form-group">
-            <label>Attack Layer</label>
-            <div class="layer-switch">
-              <button type="button" class="layer-btn active" data-layer="7">Layer 7 (HTTP)</button>
-              <button type="button" class="layer-btn" data-layer="4">Layer 4 (TCP/UDP)</button>
+    <div class="layout">
+      <aside class="sidebar">
+        <section class="card">
+          <div class="card-header"><h2>Workers</h2></div>
+          <div id="workerList" class="worker-list"></div>
+        </section>
+      </aside>
+
+      <div class="content">
+        <section class="card">
+          <div class="card-header"><h2>New Attack</h2></div>
+          <form id="configForm" class="config-form">
+            <div class="form-row">
+              <div class="form-group">
+                <label for="method">Method</label>
+                <select id="method">
+                  <optgroup label="Layer7">
+                    <option value="GET">GET</option><option value="POST">POST</option><option value="CFB">CFB</option>
+                    <option value="BYPASS">BYPASS</option><option value="CFBUAM">CFBUAM</option><option value="OVH">OVH</option>
+                    <option value="DGB">DGB</option><option value="AVB">AVB</option><option value="GSB">GSB</option>
+                    <option value="DYN">DYN</option><option value="STRESS">STRESS</option><option value="SLOW">SLOW</option>
+                    <option value="HEAD">HEAD</option><option value="COOKIE">COOKIE</option><option value="XMLRPC">XMLRPC</option>
+                    <option value="APACHE">APACHE</option><option value="NULL">NULL</option><option value="RHEX">RHEX</option>
+                    <option value="BOT">BOT</option><option value="KILLER">KILLER</option><option value="PPS">PPS</option>
+                    <option value="EVEN">EVEN</option><option value="DOWNLOADER">DOWNLOADER</option><option value="TOR">TOR</option>
+                    <option value="STOMP">STOMP</option><option value="BOMB">BOMB</option>
+                  </optgroup>
+                  <optgroup label="Layer4">
+                    <option value="TCP">TCP</option><option value="UDP">UDP</option><option value="SYN">SYN</option>
+                    <option value="CPS">CPS</option><option value="CONNECTION">CONNECTION</option><option value="VSE">VSE</option>
+                    <option value="TS3">TS3</option><option value="FIVEM">FIVEM</option><option value="MINECRAFT">MINECRAFT</option>
+                    <option value="MCBOT">MCBOT</option><option value="MEM">MEM</option><option value="NTP">NTP</option><option value="DNS">DNS</option>
+                  </optgroup>
+                </select>
+              </div>
+              <div class="form-group" style="flex:2">
+                <label for="url">Target</label>
+                <input type="text" id="url" placeholder="https://example.com or ip:port" required>
+              </div>
             </div>
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label for="method">Attack Method</label>
-              <select id="method">
-                <optgroup label="Layer7">
-                  <option value="GET">GET</option><option value="POST">POST</option><option value="CFB">CFB</option>
-                  <option value="BYPASS">BYPASS</option><option value="CFBUAM">CFBUAM</option><option value="OVH">OVH</option>
-                  <option value="DGB">DGB</option><option value="AVB">AVB</option><option value="GSB">GSB</option>
-                  <option value="DYN">DYN</option><option value="STRESS">STRESS</option><option value="SLOW">SLOW</option>
-                  <option value="HEAD">HEAD</option><option value="COOKIE">COOKIE</option><option value="XMLRPC">XMLRPC</option>
-                  <option value="APACHE">APACHE</option><option value="NULL">NULL</option><option value="RHEX">RHEX</option>
-                  <option value="BOT">BOT</option><option value="KILLER">KILLER</option><option value="PPS">PPS</option>
-                  <option value="EVEN">EVEN</option><option value="DOWNLOADER">DOWNLOADER</option><option value="TOR">TOR</option>
-                  <option value="STOMP">STOMP</option><option value="BOMB">BOMB</option>
-                </optgroup>
-                <optgroup label="Layer4">
-                  <option value="TCP">TCP</option><option value="UDP">UDP</option><option value="SYN">SYN</option>
-                  <option value="ICMP">ICMP</option><option value="CPS">CPS</option><option value="CONNECTION">CONNECTION</option>
-                  <option value="VSE">VSE</option><option value="TS3">TS3</option><option value="FIVEM">FIVEM</option>
-                  <option value="MINECRAFT">MINECRAFT</option><option value="MCBOT">MCBOT</option><option value="MEM">MEM</option>
-                  <option value="NTP">NTP</option><option value="DNS">DNS</option>
-                </optgroup>
-              </select>
+            <div class="form-row">
+              <div class="form-group"><label for="threads">Threads</label><input type="number" id="threads" value="100" min="1"></div>
+              <div class="form-group"><label for="duration">Duration (s)</label><input type="number" id="duration" value="60" min="1" max="86400"></div>
+              <div class="form-group"><label for="rpc">RPC</label><input type="number" id="rpc" value="10" min="1"></div>
+              <div class="form-group"><label for="proxyType">Proxy</label><select id="proxyType"><option value="0">All</option><option value="1">HTTP</option><option value="4">SOCKS4</option><option value="5">SOCKS5</option><option value="6">Random</option></select></div>
             </div>
-            <div class="form-group">
-              <label for="url">Target URL / IP:Port</label>
-              <input type="text" id="url" placeholder="https://example.com" required>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="assignTo">Assign to</label>
+                <select id="assignTo"><option value="">Any available worker</option></select>
+              </div>
             </div>
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label for="threads">Threads</label>
-              <input type="number" id="threads" value="100" min="1" max="10000">
-            </div>
-            <div class="form-group">
-              <label for="duration">Duration (s)</label>
-              <input type="number" id="duration" value="60" min="1" max="86400">
-            </div>
-            <div class="form-group" id="rpcGroup">
-              <label for="rpc">RPC</label>
-              <input type="number" id="rpc" value="10" min="1" max="1000">
-            </div>
-            <div class="form-group" id="proxyTypeGroup">
-              <label for="proxyType">Proxy</label>
-              <select id="proxyType">
-                <option value="0">All</option>
-                <option value="1">HTTP</option><option value="4">SOCKS4</option>
-                <option value="5">SOCKS5</option><option value="6">Random</option>
-              </select>
-            </div>
-          </div>
-          <div class="form-actions">
             <button type="submit" class="btn btn-primary" id="startBtn">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-              Start
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> Send Task
             </button>
-            <button type="button" class="btn btn-danger" id="stopBtn" disabled>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
-              Stop
-            </button>
-          </div>
-        </form>
-      </section>
+          </form>
+        </section>
 
-      <section class="card stats-card">
-        <div class="card-header">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 16l4-8 4 4 4-6"/></svg>
-          <h2>Live Stats</h2>
-        </div>
-        <div class="stats-grid">
-          <div class="stat-item"><div class="stat-value" id="statRequests">0</div><div class="stat-label">Sent</div></div>
-          <div class="stat-item"><div class="stat-value" id="statSuccess">0</div><div class="stat-label">Successful</div></div>
-          <div class="stat-item"><div class="stat-value" id="statRate">0%</div><div class="stat-label">Rate</div></div>
-          <div class="stat-item"><div class="stat-value" id="statUptime">00:00:00</div><div class="stat-label">Uptime</div></div>
-        </div>
-        <div class="progress-bar-container"><div class="progress-bar" id="progressBar"></div></div>
-      </section>
-
-      <section class="card target-card">
-        <div class="card-header">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
-          <h2>Saved Targets</h2>
-          <div class="card-actions"><span class="target-count" id="targetCount">0</span></div>
-        </div>
-        <div class="target-list" id="targetList">
-          <div class="target-empty">No saved targets</div>
-        </div>
-      </section>
-
-      <section class="card sys-card">
-        <div class="card-header">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><path d="M6 6h.01M6 18h.01"/></svg>
-          <h2>Worker Resources</h2>
-        </div>
-        <div class="sys-content">
-          <div class="sys-cpu-info" id="cpuInfo"><span class="cpu-model">Waiting for worker...</span></div>
-          <div class="sys-grid">
-            <div class="sys-item">
-              <div class="sys-header">CPU</div>
-              <div class="sys-bar-bg"><div class="sys-bar" id="cpuBar"></div></div>
-              <div class="sys-value" id="cpuValue">0%</div>
-            </div>
-            <div class="sys-item">
-              <div class="sys-header">Mem</div>
-              <div class="sys-bar-bg"><div class="sys-bar mem" id="memBar"></div></div>
-              <div class="sys-value" id="memValue">0%</div>
-            </div>
-          </div>
-          <div class="chart-row">
-            <div class="chart-box">
-              <div class="chart-label">CPU (60s)</div>
-              <canvas id="cpuChart" height="60"></canvas>
-            </div>
-            <div class="chart-box">
-              <div class="chart-label">Memory (60s)</div>
-              <canvas id="memChart" height="60"></canvas>
-            </div>
-          </div>
-        </div>
-      </section>
+        <section class="card">
+          <div class="card-header"><h2>Task History</h2><span class="task-count" id="taskCount">0</span></div>
+          <div class="task-list" id="taskList"><div class="task-empty">No tasks</div></div>
+        </section>
+      </div>
     </div>
-
-    <section class="card log-card">
-      <div class="card-header">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-        <h2>Console Log</h2>
-        <span class="log-count" id="logCount">0 lines</span>
-        <button class="btn-small" id="clearLogBtn" title="Clear">Clear</button>
-      </div>
-      <div class="log-container" id="logContainer">
-        <div class="log-empty">No output yet.</div>
-      </div>
-    </section>
   </main>
 
-  <footer class="footer">
-    <p>&copy; 2026 AcherLab &middot; <span id="footerWorker">Worker Offline</span></p>
-  </footer>
-
+  <footer class="footer">&copy; 2026 AcherLab</footer>
   <div class="toast" id="toast"></div>
-
   <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>
 </html>
