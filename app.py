@@ -71,7 +71,7 @@ def worker_auth_required(f):
     @wraps(f)
     def wrapper(*a, **kw):
         token_data = load_json(WORKER_TOKEN_FILE)
-        expected = token_data.get("token", "")
+        expected = os.environ.get("WORKER_TOKEN") or token_data.get("token", "")
         auth = request.headers.get("Authorization", "")
         if not auth.startswith("Bearer ") or not hmac.compare_digest(auth[7:], expected):
             return jsonify({"error": "Unauthorized"}), 401
