@@ -73,7 +73,7 @@ function updateTasks(tasksData) {
     list.innerHTML = '<div class="task-empty">No tasks</div>'
     return
   }
-  const colors = {pending:'#f59e0b', running:'#34d399', completed:'#6366f1', stopped:'#ef4444', error:'#ef4444'}
+  const colors = {pending:'#a855f7', running:'#c084fc', completed:'#7c3aed', stopped:'#6d28d9', error:'#ef4444'}
   const reversed = [...tasks].reverse()
   list.innerHTML = reversed.slice(0, 50).map(t => `
     <div class="task-item">
