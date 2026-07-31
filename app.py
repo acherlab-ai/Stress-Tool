@@ -28,9 +28,10 @@ def init_data():
     if not os.path.exists(WORKERS_FILE):
         with open(WORKERS_FILE, "w") as f:
             json.dump({}, f)
+    worker_token = os.environ.get("WORKER_TOKEN") or secrets.token_hex(32)
     if not os.path.exists(WORKER_TOKEN_FILE):
         with open(WORKER_TOKEN_FILE, "w") as f:
-            json.dump({"token": secrets.token_hex(32)}, f)
+            json.dump({"token": worker_token}, f)
     if not os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE, "w") as f:
             json.dump({"server_name": "AcherLab", "max_duration": 86400}, f)
