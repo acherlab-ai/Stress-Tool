@@ -162,7 +162,9 @@ def worker_loop():
     while True:
         try:
             r = requests.get(f"{SERVER_URL}/api/worker/ping?worker_id={WORKER_ID}", headers=send_headers(), timeout=10)
-            if r.status_code == 200:
+            if r.status_code == 401:
+                print(f"[ERROR] Auth failed - check WORKER_TOKEN")
+            elif r.status_code == 200:
                 data = r.json()
                 task = data.get("task")
                 if task and current_task_id is None:
@@ -199,7 +201,9 @@ def worker_loop():
                 "current_task": current_task_id,
             }
             resp = requests.post(f"{SERVER_URL}/api/worker/stats?worker_id={WORKER_ID}", json=payload, headers=send_headers(), timeout=10)
-            if resp.status_code == 200:
+            if resp.status_code == 401:
+                print(f"[ERROR] Auth failed on stats POST")
+            elif resp.status_code == 200:
                 result = resp.json()
                 if result.get("stop"):
                     print(f"[CMD] Server requested stop")
